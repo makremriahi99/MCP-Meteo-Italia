@@ -1,40 +1,37 @@
-# MCP Meteo Italia — Custom MCP Server
+# Server Meteo Italiano — FastMCP + Gradio
 
-A **Model Context Protocol (MCP) server** that gives any MCP-compatible AI assistant real-time weather data for Italian cities — built with FastMCP and Gradio.
+Server meteo per città italiane costruito con **FastMCP** (Model Context Protocol) e un'interfaccia web **Gradio**, integrabile con assistenti AI come Claude.
 
-## What it does
+## Cosa fa
 
-- Exposes a `get_meteo` tool via MCP that any Claude/AI agent can call
-- Returns current weather (temperature, conditions, humidity, wind) for Italian cities
-- Covers all major Italian cities: Milano, Roma, Napoli, Torino, Firenze, Bologna, Venezia, Genova, Palermo, Bari, and more
-- Includes a **Gradio web UI** as a standalone frontend for direct testing
+- Recupera dati meteo in tempo reale per qualsiasi città italiana
+- Espone le funzionalità tramite protocollo MCP (utilizzabile da Claude e altri LLM)
+- Interfaccia web interattiva con Gradio
+- Frontend HTML statico per uso standalone
 
-## How MCP works here
-
-```
-AI Assistant (Claude / any MCP client)
-    └─ calls tool: get_meteo("Roma")
-    └─ MCP Server (FastMCP) receives request
-    └─ calls Open-Meteo API (free, no key needed)
-    └─ returns structured weather JSON
-```
-
-## Tech stack
-
-- `fastmcp` — MCP server framework
-- `gradio` — web interface + GradioMCPServer
-- `httpx` — async HTTP client for weather API
-- [Open-Meteo](https://open-meteo.com) — free weather API, no key required
-
-## Run it
+## Come si usa
 
 ```bash
-pip install -r requirements.txt
-python app.py
+pip install fastmcp gradio requests
+python meteo_mcp.py     # avvia il server MCP
+python app.py           # avvia l'interfaccia Gradio
 ```
 
-Then open the Gradio interface or connect any MCP client to the server endpoint.
+## File
 
-## Topics
+| File | Descrizione |
+|---|---|
+| `meteo_mcp.py` | Server MCP principale |
+| `app.py` | Interfaccia Gradio |
+| `frontend.html` | Frontend HTML standalone |
+| `requirements.txt` | Dipendenze Python |
 
-`python` `mcp` `model-context-protocol` `fastmcp` `gradio` `weather` `ai-tools` `llm` `api`
+## Tecnologie
+
+- `FastMCP` — Model Context Protocol server
+- `Gradio` — interfaccia web
+- API meteo pubblica per dati italiani
+
+## Tag
+
+`python` `fastmcp` `mcp` `gradio` `meteo` `weather` `italia` `llm` `claude`
