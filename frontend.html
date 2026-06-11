@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MCP Meteo Italia</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            padding: 40px;
+            width: 100%;
+            max-width: 560px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4);
+        }
+
+        h1 {
+            color: #fff;
+            font-size: 1.8rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 6px;
+        }
+
+        .subtitle {
+            color: rgba(255, 255, 255, 0.5);
+            text-align: center;
+            font-size: 0.85rem;
+            margin-bottom: 28px;
+        }
+
+        /* Status badge */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 10px 16px;
+            margin-bottom: 24px;
+            font-size: 0.82rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #888;
+            transition: background 0.3s;
+            flex-shrink: 0;
+        }
+
+        .dot.online {
+            background: #4ade80;
+            box-shadow: 0 0 8px #4ade80;
+        }
+
+        .dot.offline {
+            background: #f87171;
+            box-shadow: 0 0 8px #f87171;
+        }
+
+        .dot.loading {
+            background: #facc15;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1
+            }
+
+            50% {
+                opacity: .4
+            }
+        }
+
+        /* Input */
+        .input-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 14px 18px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+            font-size: 1rem;
+            outline: none;
+            transition: border-color 0.2s, background 0.2s;
+        }
+
+        input[type="text"]::placeholder {
+            color: rgba(255, 255, 255, 0.35);
+        }
+
+        input[type="text"]:focus {
+            border-color: #60a5fa;
+            background: rgba(255, 255, 255, 0.12);
+        }
+
+        button.primary {
+            padding: 14px 22px;
+            border-radius: 14px;
+            border: none;
+            background: linear-gradient(135deg, #3b82f6, #6366f1);
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s, transform 0.1s;
+            white-space: nowrap;
+        }
+
+        button.primary:hover {
+            opacity: 0.88;
+        }
+
+        button.primary:active {
+            transform: scale(0.97);
+        }
+
+        button.primary:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* Chip città */
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        .chip {
+            padding: 6px 14px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: rgba(255, 255, 255, 0.75);
+            font-size: 0.82rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .chip:hover {
+            background: rgba(96, 165, 250, 0.25);
+            border-color: #60a5fa;
+            color: #fff;
+        }
+
+        /* Result box */
+        .result {
+            background: rgba(0, 0, 0, 0.35);
+            border-radius: 16px;
+            padding: 22px;
+            min-height: 90px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.95rem;
+            text-align: center;
+            line-height: 1.7;
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            transition: all 0.3s;
+        }
+
+        .result.has-data {
+            color: #fff;
+            font-size: 1.05rem;
+            white-space: pre-line;
+            justify-content: flex-start;
+            text-align: left;
+        }
+
+        .result.error {
+            color: #f87171;
+        }
+
+        /* Raw JSON toggle */
+        .raw-toggle {
+            margin-top: 12px;
+            text-align: right;
+        }
+
+        .raw-toggle button {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.35);
+            font-size: 0.75rem;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .raw-toggle button:hover {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        pre.raw {
+            margin-top: 10px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            padding: 14px;
+            font-size: 0.72rem;
+            color: #a5f3fc;
+            overflow-x: auto;
+            display: none;
+            max-height: 200px;
+            border: 1px solid rgba(255, 255, 255, 0.07);
+        }
+
+        pre.raw.visible {
+            display: block;
+        }
+
+        /* Loader spinner */
+        .spinner {
+            width: 28px;
+            height: 28px;
+            border: 3px solid rgba(255, 255, 255, 0.15);
+            border-top-color: #60a5fa;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            margin: auto;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <h1>🌤️ MCP Meteo Italia</h1>
+        <p class="subtitle">Client MCP — chiama il tool <code>get_meteo</code> via JSON-RPC</p>
+
+        <!-- Status MCP -->
+        <div class="status-bar">
+            <div class="dot loading" id="dot"></div>
+            <span id="statusText">Controllo endpoint MCP…</span>
+        </div>
+
+        <!-- Input -->
+        <div class="input-row">
+            <input type="text" id="cityInput" placeholder="Es: Milano, Roma, Venezia…" />
+            <button class="primary" id="searchBtn" onclick="cercaMeteo()">🔍 Cerca</button>
+        </div>
+
+        <!-- Chip città rapide -->
+        <div class="chips">
+            <span class="chip" onclick="cerca('Milano')">🏙️ Milano</span>
+            <span class="chip" onclick="cerca('Roma')">🏛️ Roma</span>
+            <span class="chip" onclick="cerca('Napoli')">🌋 Napoli</span>
+            <span class="chip" onclick="cerca('Venezia')">🚤 Venezia</span>
+            <span class="chip" onclick="cerca('Firenze')">🌸 Firenze</span>
+            <span class="chip" onclick="cerca('Torino')">⛰️ Torino</span>
+            <span class="chip" onclick="cerca('Palermo')">🍊 Palermo</span>
+            <span class="chip" onclick="cerca('Bologna')">🍝 Bologna</span>
+        </div>
+
+        <!-- Risultato -->
+        <div class="result" id="result">Inserisci una città e premi Cerca ☝️</div>
+
+        <!-- Raw JSON -->
+        <div class="raw-toggle">
+            <button onclick="toggleRaw()">mostra JSON grezzo</button>
+        </div>
+        <pre class="raw" id="rawJson"></pre>
+    </div>
+
+    <script>
+        const MCP_ENDPOINT = "/mcp";
+        let msgId = 1;
+        let rawVisible = false;
+
+        // ── Chiama il MCP endpoint con JSON-RPC ──────────────────────────────────────
+        async function mcpCall(method, params = {}) {
+            const res = await fetch(MCP_ENDPOINT, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ jsonrpc: "2.0", id: msgId++, method, params }),
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            return res.json();
+        }
+
+        // ── Controlla se il server MCP è online ──────────────────────────────────────
+        async function checkMCPStatus() {
+            const dot = document.getElementById("dot");
+            const text = document.getElementById("statusText");
+            dot.className = "dot loading";
+            text.textContent = "Controllo endpoint MCP…";
+            try {
+                const data = await mcpCall("tools/list");
+                if (data.result && data.result.tools) {
+                    dot.className = "dot online";
+                    const nomi = data.result.tools.map(t => t.name).join(", ");
+                    text.textContent = `MCP online ✓ — Tools: ${nomi}`;
+                } else {
+                    throw new Error("Risposta inattesa");
+                }
+            } catch (e) {
+                dot.className = "dot offline";
+                text.textContent = `MCP offline — ${e.message}`;
+            }
+        }
+
+        // ── Cerca meteo via MCP ───────────────────────────────────────────────────────
+        async function cercaMeteo() {
+            const city = document.getElementById("cityInput").value.trim();
+            if (!city) return;
+            await cerca(city);
+        }
+
+        async function cerca(city) {
+            document.getElementById("cityInput").value = city;
+            const resultEl = document.getElementById("result");
+            const rawEl = document.getElementById("rawJson");
+            const btn = document.getElementById("searchBtn");
+
+            resultEl.className = "result";
+            resultEl.innerHTML = '<div class="spinner"></div>';
+            btn.disabled = true;
+
+            try {
+                const data = await mcpCall("tools/call", {
+                    name: "get_meteo",
+                    arguments: { city },
+                });
+
+                rawEl.textContent = JSON.stringify(data, null, 2);
+
+                if (data.result && data.result.content) {
+                    const testo = data.result.content.map(c => c.text || "").join("\n");
+                    resultEl.className = "result has-data";
+                    resultEl.textContent = testo;
+                } else if (data.error) {
+                    resultEl.className = "result error";
+                    resultEl.textContent = `❌ Errore MCP: ${data.error.message}`;
+                } else {
+                    resultEl.className = "result error";
+                    resultEl.textContent = "⚠️ Risposta inattesa dal server.";
+                }
+            } catch (e) {
+                rawEl.textContent = e.toString();
+                resultEl.className = "result error";
+                resultEl.textContent = `❌ Errore di rete: ${e.message}`;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function toggleRaw() {
+            rawVisible = !rawVisible;
+            document.getElementById("rawJson").classList.toggle("visible", rawVisible);
+        }
+
+        // Enter per cercare
+        document.getElementById("cityInput").addEventListener("keydown", e => {
+            if (e.key === "Enter") cercaMeteo();
+        });
+
+        // Controlla status all'avvio
+        checkMCPStatus();
+        // Ricontrolla ogni 60s
+        setInterval(checkMCPStatus, 60000);
+    </script>
+</body>
+
+</html>
