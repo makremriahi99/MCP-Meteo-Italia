@@ -1,25 +1,15 @@
+"""MCP-Meteo-Italia: meteo attuale e previsioni per qualsiasi comune italiano.
+
+Dati: Open-Meteo (gratuito, senza API key).
+"""
 from mcp.server.fastmcp import FastMCP
 import httpx
 
-mcp = FastMCP("Meteo Mio")
+mcp = FastMCP("Meteo Italia")
 
-CITTA_ITALIANE = {
-    "milano": {"lat": 45.4642, "lon": 9.1900, "nome": "Milano"},
-    "roma": {"lat": 41.9028, "lon": 12.4964, "nome": "Roma"},
-    "napoli": {"lat": 40.8518, "lon": 14.2681, "nome": "Napoli"},
-    "torino": {"lat": 45.0703, "lon": 7.6869, "nome": "Torino"},
-    "firenze": {"lat": 43.7696, "lon": 11.2558, "nome": "Firenze"},
-    "bologna": {"lat": 44.4949, "lon": 11.3426, "nome": "Bologna"},
-    "venezia": {"lat": 45.4408, "lon": 12.3155, "nome": "Venezia"},
-    "genova": {"lat": 44.4056, "lon": 8.9463, "nome": "Genova"},
-    "palermo": {"lat": 38.1157, "lon": 13.3615, "nome": "Palermo"},
-    "bari": {"lat": 41.1171, "lon": 16.8719, "nome": "Bari"},
-    "catania": {"lat": 37.5079, "lon": 15.0830, "nome": "Catania"},
-    "verona": {"lat": 45.4384, "lon": 10.9916, "nome": "Verona"},
-    "trieste": {"lat": 45.6495, "lon": 13.7768, "nome": "Trieste"},
-    "brescia": {"lat": 45.5416, "lon": 10.2118, "nome": "Brescia"},
-    "padova": {"lat": 45.4064, "lon": 11.8768, "nome": "Padova"},
-}
+GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
+FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
+TIMEOUT = 10.0
 
 CODICI_METEO = {
     0: "Sereno ☀️",
@@ -46,48 +36,109 @@ CODICI_METEO = {
 }
 
 
+def descrizione(code: int) -> str:
+    return CODICI_METEO.get(code, f"Condizione meteo {code}")
+
+
+async def trova_citta(client: httpx.AsyncClient, nome: str) -> dict | None:
+    """Cerca un comune italiano per nome. Restituisce None se non trovato."""
+    r = await client.get(
+        GEOCODING_URL,
+        params={"name": nome.strip(), "count": 5, "language": "it", "countryCode": "IT"},
+        timeout=TIMEOUT,
+    )
+    r.raise_for_status()
+    risultati = r.json().get("results") or []
+    return risultati[0] if risultati else None
+
+
+def etichetta(luogo: dict) -> str:
+    provincia = luogo.get("admin2") or luogo.get("admin1")
+    return f"{luogo['name']} ({provincia})" if provincia else luogo["name"]
+
+
 @mcp.tool()
 async def get_meteo(city: str) -> str:
     """
-    Ottieni il meteo attuale per una città italiana.
+    Meteo ATTUALE di un comune italiano qualsiasi.
 
     Args:
-        city: Nome della città italiana (es. Milano, Roma, Napoli)
+        city: Nome del comune (es. Milano, Carugate, Matera)
 
     Returns:
-        Stringa con temperatura e condizione meteo attuale
+        Temperatura, condizione, vento e umidità in questo momento.
     """
-    city_key = city.lower().strip()
-    
-    if city_key not in CITTA_ITALIANE:
-        disponibili = ", ".join(c["nome"] for c in CITTA_ITALIANE.values())
-        return f"❌ Città '{city}' non trovata. Città disponibili: {disponibili}"
-    
-    info = CITTA_ITALIANE[city_key]
-    url = (
-        f"https://api.open-meteo.com/v1/forecast"
-        f"?latitude={info['lat']}&longitude={info['lon']}"
-        f"&current=temperature_2m,weathercode,windspeed_10m,relativehumidity_2m"
-        f"&timezone=Europe/Rome"
-    )
-    
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, timeout=10.0)
-        response.raise_for_status()
-        data = response.json()
-    
-    current = data["current"]
-    temp = current["temperature_2m"]
-    code = current["weathercode"]
-    wind = current["windspeed_10m"]
-    humidity = current["relativehumidity_2m"]
-    
-    condizione = CODICI_METEO.get(code, f"Condizione meteo {code}")
-    
+    try:
+        async with httpx.AsyncClient() as client:
+            luogo = await trova_citta(client, city)
+            if not luogo:
+                return f"❌ Comune '{city}' non trovato in Italia. Controlla l'ortografia."
+            r = await client.get(
+                FORECAST_URL,
+                params={
+                    "latitude": luogo["latitude"],
+                    "longitude": luogo["longitude"],
+                    "current": "temperature_2m,weathercode,windspeed_10m,relativehumidity_2m",
+                    "timezone": "Europe/Rome",
+                },
+                timeout=TIMEOUT,
+            )
+            r.raise_for_status()
+            c = r.json()["current"]
+    except httpx.HTTPError as e:
+        return f"❌ Servizio meteo non raggiungibile: {e}"
+
     return (
-        f"🏙️ {info['nome']}: {temp}°C, {condizione}\n"
-        f"💨 Vento: {wind} km/h | 💧 Umidità: {humidity}%"
+        f"🏙️ {etichetta(luogo)}: {c['temperature_2m']}°C, {descrizione(c['weathercode'])}\n"
+        f"💨 Vento: {c['windspeed_10m']} km/h | 💧 Umidità: {c['relativehumidity_2m']}%"
     )
+
+
+@mcp.tool()
+async def get_previsioni(city: str, giorni: int = 3) -> str:
+    """
+    Previsioni giornaliere per un comune italiano qualsiasi.
+
+    Args:
+        city: Nome del comune (es. Roma, Carugate, Matera)
+        giorni: Quanti giorni di previsione, da 1 a 7 (default 3)
+
+    Returns:
+        Per ogni giorno: condizione, temperatura minima/massima,
+        probabilità di precipitazioni e millimetri di pioggia attesi.
+    """
+    giorni = max(1, min(7, giorni))
+    try:
+        async with httpx.AsyncClient() as client:
+            luogo = await trova_citta(client, city)
+            if not luogo:
+                return f"❌ Comune '{city}' non trovato in Italia. Controlla l'ortografia."
+            r = await client.get(
+                FORECAST_URL,
+                params={
+                    "latitude": luogo["latitude"],
+                    "longitude": luogo["longitude"],
+                    "daily": "weathercode,temperature_2m_max,temperature_2m_min,"
+                             "precipitation_probability_max,precipitation_sum",
+                    "forecast_days": giorni,
+                    "timezone": "Europe/Rome",
+                },
+                timeout=TIMEOUT,
+            )
+            r.raise_for_status()
+            d = r.json()["daily"]
+    except httpx.HTTPError as e:
+        return f"❌ Servizio meteo non raggiungibile: {e}"
+
+    righe = [f"📅 Previsioni per {etichetta(luogo)}:"]
+    for i, giorno in enumerate(d["time"]):
+        prob = d["precipitation_probability_max"][i]
+        righe.append(
+            f"{giorno}: {descrizione(d['weathercode'][i])}, "
+            f"{d['temperature_2m_min'][i]}°–{d['temperature_2m_max'][i]}°C, "
+            f"pioggia {prob if prob is not None else '?'}% ({d['precipitation_sum'][i]} mm)"
+        )
+    return "\n".join(righe)
 
 
 if __name__ == "__main__":
